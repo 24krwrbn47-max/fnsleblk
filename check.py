@@ -29,13 +29,23 @@ def count_offers(text: str) -> int:
     return len(re.findall(r"\d+[,.]?\d*\s*€", text))
 
 
+UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36")
+
 with sync_playwright() as p:
-    browser = p.chromium.launch(headless=True)
-    page = browser.new_context(locale="de-DE").new_page()
-    page.goto(URL, wait_until="networkidle", timeout=60000)
-    text = page.inner_text("body")
-    Path("debug.html").write_text(page.content(), encoding="utf-8")
-    browser.close()
+    browser = p.chromium.launch(
+        headless=True,
+        args=["--disable-http2", "--disable-blink-features=AutomationControlled"],
+    )
+    ctx = browser.new_context(locale="de-DE", user_agent=UA, viewport={"width": 1366, "height": 900})
+    page = ctx.new_page()
+    try:
+        page.goto(URL, wait_until="domcontentloaded", timeout=60000)
+        page.wait_for_timeout(8000)
+        text = page.inner_text("body")
+    finally:
+        Path("debug.html").write_text(page.content(), encoding="utf-8")
+        browser.close()
 
 n = count_offers(text)
 last = json.loads(STATE.read_text())["count"] if STATE.exists() else 0
